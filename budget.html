@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8" />
+    <title>Simpele Budget App met Datum</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 2em auto; }
+        input, button, select { margin: 0.5em 0; width: 100%; padding: 0.5em; box-sizing: border-box; }
+        label { font-weight: bold; display: block; margin-top: 1em; }
+        .uitgave-item { display: flex; justify-content: space-between; margin: 0.3em 0; }
+        .uitgave-item span { flex: 1; }
+        .uitgave-item button { flex: 0; }
+    </style>
+</head>
+<body>
+
+<h1>Simpele Budget App met Datum</h1>
+
+<label for="inkomen">Maandelijks inkomen (€):</label>
+<input type="number" id="inkomen" value="3000" min="0" step="0.01" />
+
+<label for="vasteKosten">Vaste kosten per maand (€):</label>
+<input type="number" id="vasteKosten" value="1500" min="0" step="0.01" />
+
+<p><strong>Totaal budget deze maand:</strong> €<span id="totaalBudget">1500.00</span></p>
+<p><strong>Basis dagbudget:</strong> €<span id="dagBudget">50.00</span></p>
+<p><strong>Resterend dagbudget vandaag:</strong> €<span id="restDagBudget">50.00</span></p>
+
+<label for="uitgaveDatum">Datum uitgave:</label>
+<input type="date" id="uitgaveDatum" />
+
+<label for="uitgaveBedrag">Uitgave toevoegen (€):</label>
+<input type="number" id="uitgaveBedrag" min="0" step="0.01" />
+<button id="toevoegenUitgave">Uitgave toevoegen</button>
+
+<h2>Uitgaven deze maand</h2>
+<div id="uitgavenLijst"></div>
+
+<script>
+    // Hulpfunctie: formatteer date naar yyyy-mm-dd
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // Data en state
+    let inkomen = parseFloat(document.getElementById('inkomen').value);
+    let vasteKosten = parseFloat(document.getElementById('vasteKosten').value);
+    const uitgaven = []; // array van {bedrag, datum (Date)}
+
+    // Zet default datum input op vandaag
+    const uitgaveDatumInput = document.getElementById('uitgaveDatum');
+    const vandaagDate = new Date();
+    uitgaveDatumInput.value = formatDate(vandaagDate);
+
+    // Bereken aantal dagen in huidige maand
+    function aantalDagenDezeMaand() {
+      const nu = new Date();
+      return new Date(nu.getFullYear(), nu.getMonth() + 1, 0).getDate();
+    }
+
+    // Bereken totaal budget = inkomen - vaste kosten
+    function totaalBudget() {
+      return Math.max(inkomen - vasteKosten, 0);
+    }
+
+    // Bereken basis dagbudget (zonder rollover)
+    function basisDagbudget() {
+      return totaalBudget() / aantalDagenDezeMaand();
+    }
+
+    // Bereken dagbudget met rollover voor alle dagen van de maand
+    function berekenDagbudgetMetRollover() {
+      const nu = new Date();
+      const jaar = nu.getFullYear();
+      const maand = nu.getMonth(); // 0-indexed
+      const dagen = aantalDagenDezeMaand();
+      const dagBudgetBasis = basisDagbudget();
+
+      // Sorteer uitgaven op datum
+      uitgaven.sort((a,b) => a.datum - b.datum);
+
+      // Maak een map dagnummer -> uitgaven totaal die dag
+      const uitgavenPerDag = new Map();
+      for(let d=1; d<=dagen; d++) {
+        uitgavenPerDag.set(d, 0);
+      }
+      uitgaven.forEach(u => {
+        if(u.datum.getFullYear() === jaar && u.datum.getMonth() === maand) {
+          const dagNr = u.datum.getDate();
+          uitgavenPerDag.set(dagNr, (uitgavenPerDag.get(dagNr) || 0) + u.bedrag);
+        }
+      });
+
+      const dagBudgetArray = [];
+      let rollover = 0;
+      for(let dag=1; dag<=dagen; dag++) {
+        const uitgaveVandaag = uitgavenPerDag.get(dag) || 0;
+        const budgetVandaag = dagBudgetBasis + rollover;
+        const rest = budgetVandaag - uitgaveVandaag;
+        dagBudgetArray.push({ dag, budgetVandaag, uitgaveVandaag, rest });
+        rollover = rest;
+      }
+      return dagBudgetArray;
+    }
+
+    // Update weergave
+    function updateWeergave() {
+      inkomen = parseFloat(document.getElementById('inkomen').value) || 0;
+      vasteKosten = parseFloat(document.getElementById('vasteKosten').value) || 0;
+
+      document.getElementById('totaalBudget').textContent = totaalBudget().toFixed(2);
+      document.getElementById('dagBudget').textContent = basisDagbudget().toFixed(2);
+
+      const dagbudgetData = berekenDagbudgetMetRollover();
+
+      const vandaag = new Date().getDate();
+      const vandaagData = dagbudgetData.find(d => d.dag === vandaag) || {budgetVandaag: basisDagbudget(), rest: basisDagbudget()};
+
+      document.getElementById('restDagBudget').textContent = vandaagData.rest.toFixed(2);
+
+      // Toon uitgaven
+      const lijst = document.getElementById('uitgavenLijst');
+      lijst.innerHTML = '';
+
+      // Sorteer uitgaven op datum en bedrag voor nettere lijst
+      uitgaven.sort((a,b) => a.datum - b.datum || a.bedrag - b.bedrag);
+
+      uitgaven.forEach((u, i) => {
+        const div = document.createElement('div');
+        div.className = 'uitgave-item';
+        div.innerHTML = `
+          <span>${formatDate(u.datum)}</span>
+          <span>€ ${u.bedrag.toFixed(2)}</span>
+          <button data-index="${i}">Verwijder</button>
+        `;
+        lijst.appendChild(div);
+      });
+
+      // Verwijder-knop
+      lijst.querySelectorAll('button').forEach(btn => {
+        btn.onclick = e => {
+          const index = parseInt(e.target.getAttribute('data-index'));
+          uitgaven.splice(index, 1);
+          updateWeergave();
+        }
+      });
+    }
+
+    // Uitgave toevoegen
+    document.getElementById('toevoegenUitgave').onclick = () => {
+      const val = parseFloat(document.getElementById('uitgaveBedrag').value);
+      const datumStr = document.getElementById('uitgaveDatum').value;
+      if(!datumStr) {
+        alert('Kies een geldige datum');
+        return;
+      }
+      if(isNaN(val) || val <= 0) {
+        alert('Voer een positief bedrag in');
+        return;
+      }
+      // Datum omzetten naar Date object (lokale tijd)
+      const [jaar, maand, dag] = datumStr.split('-').map(Number);
+      const datum = new Date(jaar, maand - 1, dag);
+
+      uitgaven.push({ bedrag: val, datum });
+      document.getElementById('uitgaveBedrag').value = '';
+      updateWeergave();
+    };
+
+    // Event listeners input
+    document.getElementById('inkomen').addEventListener('input', updateWeergave);
+    document.getElementById('vasteKosten').addEventListener('input', updateWeergave);
+    document.getElementById('uitgaveDatum').addEventListener('input', () => { /* kan evt validatie toevoegen */ });
+
+    // Init
+    updateWeergave();
+</script>
+
+</body>
+</html>
