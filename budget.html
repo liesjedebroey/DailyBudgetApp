@@ -2,7 +2,10 @@
 <html lang="nl">
 <head>
     <meta charset="UTF-8" />
-    <title>Simpele Budget App met Datum</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simpele Budget App PWA</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#2F80ED" />
     <style>
         body { font-family: Arial, sans-serif; max-width: 500px; margin: 2em auto; }
         input, button, select { margin: 0.5em 0; width: 100%; padding: 0.5em; box-sizing: border-box; }
@@ -173,10 +176,20 @@
     // Event listeners input
     document.getElementById('inkomen').addEventListener('input', updateWeergave);
     document.getElementById('vasteKosten').addEventListener('input', updateWeergave);
-    document.getElementById('uitgaveDatum').addEventListener('input', () => { /* kan evt validatie toevoegen */ });
 
     // Init
     updateWeergave();
+
+    // --- PWA Service Worker registratie ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then(registration => {
+          console.log('ServiceWorker geregistreerd:', registration.scope);
+        }).catch(error => {
+          console.log('ServiceWorker registratie mislukt:', error);
+        });
+      });
+    }
 </script>
 
 </body>
